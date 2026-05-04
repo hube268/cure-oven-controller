@@ -79,6 +79,23 @@
     .conn-dot.connected    { background: var(--green); box-shadow: 0 0 6px var(--green); }
     .conn-dot.disconnected { background: var(--red); }
 
+    .server-ip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-family: monospace;
+      letter-spacing: 0.02em;
+      cursor: default;
+    }
+    .server-ip-label { color: var(--muted); font-size: 10px; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .server-ip-addr  { color: var(--text); }
+
     .topbar-btn {
       background: var(--surface2);
       border: 1px solid var(--border);
@@ -554,6 +571,11 @@
   <!-- ═══════ Top Bar ═══════ -->
   <header class="topbar">
     <div class="topbar-title">🔥 Cure Oven</div>
+
+    <div class="server-ip" title="Access the web UI at this address from any device on your network">
+      <span class="server-ip-label">WEB UI</span>
+      <span class="server-ip-addr" id="serverIpAddr">…</span>
+    </div>
 
     <div class="conn-indicator">
       <div class="conn-dot" id="connDot"></div>
@@ -1304,6 +1326,18 @@ function fmtTime(totalSec) {
 // ═══════════════════════════════════════════════════════════
 fetch('/api/state').then(r => r.json()).then(updateUI).catch(() => {});
 setTimeout(checkUpdate, 3000);  // check for updates 3s after load
+
+// Fetch and display server IP in the topbar
+fetch('/api/server_info')
+  .then(r => r.json())
+  .then(d => {
+    const el = document.getElementById('serverIpAddr');
+    if (el) el.textContent = d.url || d.ip;
+  })
+  .catch(() => {
+    const el = document.getElementById('serverIpAddr');
+    if (el) el.textContent = window.location.host;
+  });
 </script>
 </body>
 </html>

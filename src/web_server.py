@@ -25,6 +25,7 @@ SocketIO event:
 """
 
 import json
+import socket as _socket
 import subprocess
 import threading
 import time
@@ -204,6 +205,18 @@ def create_app(controller, state, config: dict):
             return jsonify({"success": success, "output": output})
         except Exception as exc:
             return jsonify({"success": False, "output": str(exc)})
+
+    @app.route("/api/server_info")
+    def api_server_info():
+        try:
+            s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            ip = _socket.gethostname()
+        port = _config.get("server", {}).get("port", 5000)
+        return jsonify({"ip": ip, "port": port, "url": f"http://{ip}:{port}"})
 
     @app.route("/api/check_update")
     def api_check_update():
