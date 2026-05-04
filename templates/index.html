@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=800, initial-scale=1.0">
+  <title>Cure Oven Controller</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    /* ═══════════════════════ Reset & Base ═══════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0d0f;
+      --surface:   #16161a;
+      --surface2:  #1e1e24;
+      --border:    #2a2a35;
+      --accent:    #f97316;
+      --accent2:   #fb923c;
+      --blue:      #3b82f6;
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --yellow:    #eab308;
+      --text:      #e2e2e8;
+      --muted:     #6b6b80;
+      --tc1:       #f97316;
+      --tc2:       #3b82f6;
+      --radius:    10px;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      height: 100%;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ═══════════════════════ Layout ═══════════════════════ */
+    .app {
+      display: grid;
+      grid-template-rows: 48px 1fr;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ═══════════════════════ Top Bar ═══════════════════════ */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+    }
+    .topbar-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--accent);
+      text-transform: uppercase;
+      flex: 1;
+    }
+    .conn-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .conn-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .conn-dot.connected    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .conn-dot.disconnected { background: var(--red); }
+
+    .topbar-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .topbar-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .update-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+      display: none;
+    }
+    .update-dot.visible { display: block; }
+
+    /* ═══════════════════════ Main Grid ═══════════════════════ */
+    .main {
+      display: grid;
+      grid-template-columns: 290px 1fr;
+      gap: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* ═══════════════════════ Left Panel ═══════════════════════ */
+    .left-panel {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+      overflow-y: auto;
+    }
+
+    /* ═══════════════════════ Cards ═══════════════════════ */
+    .card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+    .card-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* ═══════════════════════ Thermocouple Display ═══════════════════════ */
+    .tc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .tc-box {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 10px 8px;
+      text-align: center;
+      border: 1px solid var(--border);
+    }
+    .tc-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .tc-box:first-child .tc-label { color: var(--tc1); }
+    .tc-box:last-child  .tc-label { color: var(--tc2); }
+    .tc-value {
+      font-size: 32px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .tc-box:first-child .tc-value { color: var(--tc1); }
+    .tc-box:last-child  .tc-value { color: var(--tc2); }
+    .tc-unit {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ═══════════════════════ Setpoint ═══════════════════════ */
+    .setpoint-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sp-btn {
+      width: 36px; height: 36px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 20px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .sp-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .sp-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 22px;
+      font-weight: 700;
+      text-align: center;
+      padding: 4px;
+      outline: none;
+      font-variant-numeric: tabular-nums;
+      transition: border-color 0.15s;
+    }
+    .sp-input:focus { border-color: var(--accent); }
+    .sp-unit {
+      font-size: 13px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    /* ═══════════════════════ Duration ═══════════════════════ */
+    .duration-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .duration-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      padding: 6px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .duration-input:focus { border-color: var(--accent); }
+
+    /* ═══════════════════════ Status / Timer ═══════════════════════ */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .status-pill.idle     { background: rgba(107,107,128,0.2); color: var(--muted); }
+    .status-pill.heating  { background: rgba(249,115,22,0.15); color: var(--accent); }
+    .status-pill.curing   { background: rgba(34,197,94,0.15);  color: var(--green); }
+    .status-pill.cooling  { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .status-pill.error    { background: rgba(239,68,68,0.15);  color: var(--red); }
+
+    .timer-display {
+      font-size: 28px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--green);
+      text-align: center;
+      letter-spacing: 0.05em;
+    }
+    .timer-sub {
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 2px;
+    }
+    .progress-bar-bg {
+      background: var(--bg);
+      border-radius: 4px;
+      height: 6px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 4px;
+      transition: width 0.5s;
+    }
+
+    /* ═══════════════════════ PID Output ═══════════════════════ */
+    .pid-bar-bg {
+      background: var(--bg);
+      border-radius: 4px;
+      height: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .pid-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--accent));
+      transition: width 0.5s;
+    }
+    .pid-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    /* ═══════════════════════ Toggle Switches ═══════════════════════ */
+    .toggle-row {
+      display: flex;
+      gap: 8px;
+    }
+    .toggle-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 6px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .toggle-btn .icon { font-size: 20px; }
+    .toggle-btn:hover { border-color: var(--muted); }
+    .toggle-btn.active.fan   { border-color: var(--blue);   color: var(--blue);   background: rgba(59,130,246,0.1); }
+    .toggle-btn.active.light { border-color: var(--yellow); color: var(--yellow); background: rgba(234,179,8,0.1); }
+
+    /* ═══════════════════════ Action Buttons ═══════════════════════ */
+    .btn {
+      width: 100%;
+      padding: 11px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.04em;
+    }
+    .btn-start {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-start:hover { background: var(--accent2); }
+    .btn-start:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+    .btn-stop {
+      background: rgba(239,68,68,0.15);
+      color: var(--red);
+      border: 1px solid var(--red);
+    }
+    .btn-stop:hover { background: rgba(239,68,68,0.25); }
+    .btn-stop:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-connect {
+      background: rgba(59,130,246,0.15);
+      color: var(--blue);
+      border: 1px solid var(--blue);
+    }
+    .btn-connect:hover { background: rgba(59,130,246,0.25); }
+
+    /* ═══════════════════════ Right Panel (Graph) ═══════════════════════ */
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .graph-card {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .graph-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .graph-legend {
+      display: flex;
+      gap: 14px;
+      font-size: 11px;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 5px;
+    }
+    .legend-dot {
+      width: 10px; height: 3px; border-radius: 2px;
+    }
+    .chart-wrap {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+    }
+
+    /* ═══════════════════════ Info Row ═══════════════════════ */
+    .info-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .info-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+    }
+    .info-box-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .info-box-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* ═══════════════════════ Modals ═══════════════════════ */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      width: 380px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .modal-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .modal-header { display: flex; align-items: center; }
+    .network-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 200px;
+    }
+    .network-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .network-item:hover { border-color: var(--accent); }
+    .network-item.selected { border-color: var(--accent); background: rgba(249,115,22,0.1); }
+    .network-ssid { font-size: 13px; font-weight: 600; flex: 1; }
+    .network-signal {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .network-lock { font-size: 11px; color: var(--muted); }
+    .network-inuse { font-size: 10px; color: var(--green); font-weight: 600; }
+    .modal-input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .modal-input:focus { border-color: var(--accent); }
+    .modal-actions { display: flex; gap: 8px; }
+    .modal-btn {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .modal-btn-primary { background: var(--accent); color: #fff; }
+    .modal-btn-primary:hover { background: var(--accent2); }
+    .modal-btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .modal-btn-secondary:hover { border-color: var(--muted); }
+    .modal-status { font-size: 12px; color: var(--muted); text-align: center; min-height: 16px; }
+    .modal-status.ok  { color: var(--green); }
+    .modal-status.err { color: var(--red); }
+
+    /* Connect / port modal */
+    .port-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+    .port-item {
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      cursor: pointer;
+      font-size: 12px;
+      transition: border-color 0.15s;
+    }
+    .port-item:hover { border-color: var(--accent); }
+    .port-item.selected { border-color: var(--accent); background: rgba(249,115,22,0.1); }
+    .port-desc { color: var(--muted); font-size: 10px; margin-top: 2px; }
+
+    /* Update modal */
+    .update-output {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 11px;
+      color: var(--green);
+      min-height: 60px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* Touch ripple */
+    .btn:active, .toggle-btn:active, .sp-btn:active { opacity: 0.8; transform: scale(0.97); }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ═══════ Top Bar ═══════ -->
+  <header class="topbar">
+    <div class="topbar-title">🔥 Cure Oven</div>
+
+    <div class="conn-indicator">
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connLabel">Disconnected</span>
+    </div>
+
+    <button class="topbar-btn" onclick="openModal('connectModal')">
+      ⚡ Connect
+    </button>
+    <button class="topbar-btn" onclick="openModal('wifiModal'); scanWifi()">
+      📶 WiFi
+    </button>
+    <button class="topbar-btn" id="updateBtn" onclick="openModal('updateModal'); checkUpdate()">
+      ↑ Update
+      <span class="update-dot" id="updateDot"></span>
+    </button>
+  </header>
+
+  <!-- ═══════ Main ═══════ -->
+  <div class="main">
+
+    <!-- Left Panel -->
+    <div class="left-panel">
+
+      <!-- Thermocouple Temps -->
+      <div class="card">
+        <div class="card-title">Temperature</div>
+        <div class="tc-grid">
+          <div class="tc-box">
+            <div class="tc-label">TC 1 (Primary)</div>
+            <div class="tc-value" id="tc1Value">--</div>
+            <div class="tc-unit" id="tc1Unit">°F</div>
+          </div>
+          <div class="tc-box">
+            <div class="tc-label">TC 2</div>
+            <div class="tc-value" id="tc2Value">--</div>
+            <div class="tc-unit" id="tc2Unit">°F</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Setpoint -->
+      <div class="card">
+        <div class="card-title">Target Temperature</div>
+        <div class="setpoint-row">
+          <button class="sp-btn" onclick="adjustSetpoint(-5)">−</button>
+          <input class="sp-input" id="setpointInput" type="number"
+                 value="200" min="0" max="450" step="5"
+                 onchange="sendSetpoint()" oninput="sendSetpoint()">
+          <span class="sp-unit" id="spUnit">°F</span>
+          <button class="sp-btn" onclick="adjustSetpoint(+5)">+</button>
+        </div>
+      </div>
+
+      <!-- Cure Duration -->
+      <div class="card">
+        <div class="card-title">Cure Duration (minutes)</div>
+        <div class="duration-row">
+          <button class="sp-btn" onclick="adjustDuration(-5)">−</button>
+          <input class="duration-input" id="durationInput" type="number"
+                 value="30" min="1" max="480" step="5">
+          <button class="sp-btn" onclick="adjustDuration(+5)">+</button>
+        </div>
+      </div>
+
+      <!-- Status & Timer -->
+      <div class="card">
+        <div class="card-title">Status</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <span class="status-pill idle" id="statusPill">Idle</span>
+          <span style="font-size:10px;color:var(--muted)" id="pcbState">--</span>
+        </div>
+        <div class="timer-display" id="timerDisplay">00:00:00</div>
+        <div class="timer-sub" id="timerSub">Cure timer</div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="timerBar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Heater Power (PID) -->
+      <div class="card">
+        <div class="card-title">Heater Power</div>
+        <div class="pid-label">
+          <span>PID Output</span>
+          <span id="pidPct">0%</span>
+        </div>
+        <div class="pid-bar-bg">
+          <div class="pid-bar-fill" id="pidBar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Fan & Light -->
+      <div class="card">
+        <div class="card-title">Accessories</div>
+        <div class="toggle-row">
+          <button class="toggle-btn fan" id="fanBtn" onclick="toggleFan()">
+            <span class="icon">💨</span>Fan
+          </button>
+          <button class="toggle-btn light" id="lightBtn" onclick="toggleLight()">
+            <span class="icon">💡</span>Light
+          </button>
+        </div>
+        <!-- Fan speed slider (shown only when fan is on) -->
+        <div id="fanSpeedRow" style="margin-top:8px;display:none">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:4px">
+            <span>Fan Speed</span><span id="fanSpeedLabel">255</span>
+          </div>
+          <input type="range" id="fanSpeedSlider" min="0" max="255" value="255" step="16"
+                 style="width:100%;accent-color:var(--blue)"
+                 oninput="document.getElementById('fanSpeedLabel').textContent=this.value"
+                 onchange="setFanSpeed(this.value)">
+        </div>
+        <!-- Coil + door status row -->
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--muted)">
+          <span>Coil: <span id="coilTempVal" style="color:var(--text);font-weight:600">--</span>°</span>
+          <span id="doorStatus" style="font-weight:600">🚪 --</span>
+        </div>
+      </div>
+
+      <!-- Start / Stop -->
+      <button class="btn btn-start" id="startBtn" onclick="startCure()">
+        ▶ START CURE
+      </button>
+      <button class="btn btn-stop" id="stopBtn" onclick="stopCure()" disabled>
+        ■ STOP CURE
+      </button>
+
+    </div><!-- /left-panel -->
+
+    <!-- Right Panel -->
+    <div class="right-panel">
+
+      <!-- Info Row -->
+      <div class="info-row">
+        <div class="info-box">
+          <div class="info-box-label">Setpoint</div>
+          <div class="info-box-value" id="infoSetpoint" style="color:var(--accent)">--°</div>
+        </div>
+        <div class="info-box">
+          <div class="info-box-label">Remaining</div>
+          <div class="info-box-value" id="infoRemaining" style="color:var(--green)">--</div>
+        </div>
+        <div class="info-box">
+          <div class="info-box-label">Coil Temp</div>
+          <div class="info-box-value" id="infoCoil" style="color:var(--yellow)">--°</div>
+        </div>
+        <div class="info-box">
+          <div class="info-box-label">Door</div>
+          <div class="info-box-value" id="infoDoor" style="color:var(--muted)">--</div>
+        </div>
+      </div>
+
+      <!-- Temperature Graph -->
+      <div class="graph-card">
+        <div class="graph-header">
+          <div class="card-title" style="margin:0">Temperature History</div>
+          <div class="graph-legend">
+            <div class="legend-item">
+              <div class="legend-dot" style="background:var(--tc1)"></div>
+              <span style="color:var(--tc1)">TC 1</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background:var(--tc2)"></div>
+              <span style="color:var(--tc2)">TC 2</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background:#ffffff55; border: 1px dashed #ffffff55; height:1px;"></div>
+              <span style="color:var(--muted)">Setpoint</span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="tempChart"></canvas>
+        </div>
+      </div>
+
+    </div><!-- /right-panel -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+
+<!-- ═══════ Connect Modal ═══════ -->
+<div class="modal-overlay" id="connectModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Connect to PCB</div>
+      <button class="modal-close" onclick="closeModal('connectModal')">✕</button>
+    </div>
+    <div class="port-list" id="portList">
+      <div style="color:var(--muted);font-size:12px;padding:10px">Loading ports…</div>
+    </div>
+    <div class="modal-status" id="connectStatus"></div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-secondary" onclick="loadPorts()">🔄 Refresh</button>
+      <button class="modal-btn modal-btn-primary" onclick="doConnect()">Connect</button>
+      <button class="modal-btn modal-btn-secondary" onclick="doDisconnect()">Disconnect</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ WiFi Modal ═══════ -->
+<div class="modal-overlay" id="wifiModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">WiFi Settings</div>
+      <button class="modal-close" onclick="closeModal('wifiModal')">✕</button>
+    </div>
+    <div class="modal-status" id="wifiCurrentStatus">Checking connection…</div>
+    <div class="network-list" id="networkList">
+      <div style="color:var(--muted);font-size:12px;padding:10px">Scanning…</div>
+    </div>
+    <input class="modal-input" id="wifiPassword" type="password"
+           placeholder="Password (leave blank for open networks)">
+    <div class="modal-status" id="wifiConnectStatus"></div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-secondary" onclick="scanWifi()">🔄 Scan</button>
+      <button class="modal-btn modal-btn-primary" onclick="doWifiConnect()">Connect</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ Update Modal ═══════ -->
+<div class="modal-overlay" id="updateModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Software Update</div>
+      <button class="modal-close" onclick="closeModal('updateModal')">✕</button>
+    </div>
+    <div class="modal-status" id="updateStatus">Checking for updates…</div>
+    <div class="update-output" id="updateOutput"></div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-secondary" onclick="checkUpdate()">🔄 Check</button>
+      <button class="modal-btn modal-btn-primary" id="applyUpdateBtn"
+              onclick="applyUpdate()" disabled>
+        ↑ Apply Update
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════════════
+let appState = {
+  temp1: null, temp2: null, temp_avg: null,
+  coil_temp: null, internal_temp: null,
+  setpoint: 200, mode: 'idle',
+  fan_on: false, fan_speed: 0, light_on: false,
+  pid_output: 0, units: 'F', serial_connected: false,
+  cure_duration: 0, cure_elapsed: 0, cure_remaining: 0,
+  pcb_state: '--', pcb_timer: '0:00:00',
+  stay_on: false, stay_on_minutes: 30,
+  door_closed: true,
+};
+let fanState   = false;
+let lightState = false;
+let selectedPort    = null;
+let selectedNetwork = null;
+let chartSetpointRef = 200;
+
+// ═══════════════════════════════════════════════════════════
+//  Chart.js Setup
+// ═══════════════════════════════════════════════════════════
+const ctx = document.getElementById('tempChart').getContext('2d');
+const tempChart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'TC 1',
+        data: [],
+        borderColor: '#f97316',
+        backgroundColor: 'rgba(249,115,22,0.08)',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: true,
+      },
+      {
+        label: 'TC 2',
+        data: [],
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.06)',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: false,
+      },
+      {
+        label: 'Setpoint',
+        data: [],
+        borderColor: 'rgba(255,255,255,0.3)',
+        borderWidth: 1.5,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        tension: 0,
+        fill: false,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 0 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#16161a',
+        borderColor: '#2a2a35',
+        borderWidth: 1,
+        titleColor: '#6b6b80',
+        bodyColor: '#e2e2e8',
+        callbacks: {
+          label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y ?? '--'}°`
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: '#6b6b80',
+          maxTicksLimit: 8,
+          font: { size: 10 }
+        },
+        grid: { color: '#1e1e24' }
+      },
+      y: {
+        ticks: {
+          color: '#6b6b80',
+          font: { size: 10 }
+        },
+        grid: { color: '#1e1e24' }
+      }
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  SocketIO
+// ═══════════════════════════════════════════════════════════
+const socket = io();
+
+socket.on('state_update', (state) => {
+  appState = state;
+  updateUI(state);
+});
+
+// ═══════════════════════════════════════════════════════════
+//  UI Update
+// ═══════════════════════════════════════════════════════════
+function updateUI(s) {
+  const unit = s.units || 'F';
+  const fmt  = v => (v !== null && v !== undefined) ? v.toFixed(1) : '--';
+
+  // ── Thermocouple temperatures ──────────────────────────────────────────
+  // TC1 and TC2 are individual raw thermocouple readings.
+  // temp_avg is their average (use as the "main" display value).
+  document.getElementById('tc1Value').textContent = fmt(s.temp1);
+  document.getElementById('tc2Value').textContent = fmt(s.temp2 !== null ? s.temp2 : s.temp_avg);
+  document.getElementById('tc1Unit').textContent = '°' + unit;
+  document.getElementById('tc2Unit').textContent = '°' + unit;
+  document.getElementById('spUnit').textContent  = '°' + unit;
+
+  // ── Connection ─────────────────────────────────────────────────────────
+  const dot = document.getElementById('connDot');
+  const lbl = document.getElementById('connLabel');
+  if (s.serial_connected) {
+    dot.className = 'conn-dot connected';
+    lbl.textContent = s.serial_port || 'Connected';
+  } else {
+    dot.className = 'conn-dot disconnected';
+    lbl.textContent = 'Disconnected';
+  }
+
+  // ── PCB state label ────────────────────────────────────────────────────
+  document.getElementById('pcbState').textContent = s.pcb_state || '--';
+
+  // ── Setpoint input — sync from PCB without interrupting user edits ─────
+  if (s.setpoint && s.setpoint > 0) {
+    const spInput = document.getElementById('setpointInput');
+    if (document.activeElement !== spInput) {
+      spInput.value = Math.round(s.setpoint);
+    }
+  }
+  document.getElementById('infoSetpoint').textContent = (s.setpoint || '--') + '°';
+  chartSetpointRef = s.setpoint;
+
+  // ── Mode / status pill ─────────────────────────────────────────────────
+  const pill = document.getElementById('statusPill');
+  const modeMap = {
+    idle:    ['idle',    'Idle'],
+    heating: ['heating', 'Heating'],
+    curing:  ['curing',  'Curing'],
+    cooling: ['cooling', 'Cooling'],
+    error:   ['error',   'ERROR'],
+  };
+  const [cls, label] = modeMap[s.mode] || ['idle', 'Idle'];
+  pill.className = `status-pill ${cls}`;
+  pill.textContent = label;
+
+  // ── Timer — prefer PCB-reported timer string, fall back to computed ─────
+  const elapsed   = s.cure_elapsed  || 0;
+  const duration  = s.cure_duration || 0;
+  const remaining = s.cure_remaining || 0;
+  const active    = s.mode === 'heating' || s.mode === 'curing';
+
+  // Use the PCB's own elapsed timer when available and running
+  const pcbTimer = s.pcb_timer || '0:00:00';
+  const showPcbTimer = active && pcbTimer !== '0:00:00';
+  document.getElementById('timerDisplay').textContent = showPcbTimer ? pcbTimer : fmtTime(elapsed);
+  document.getElementById('infoRemaining').textContent = fmtTime(remaining);
+
+  const pct = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
+  document.getElementById('timerBar').style.width = pct + '%';
+  document.getElementById('timerSub').textContent = duration > 0
+    ? `${fmtTime(remaining)} remaining of ${(duration / 60).toFixed(0)} min`
+    : 'Cure timer';
+
+  // ── PID output bar (PCB's internal PID output, 0–100) ──────────────────
+  const pidPct = Math.round(s.pid_output || 0);
+  document.getElementById('pidPct').textContent = pidPct + '%';
+  document.getElementById('pidBar').style.width  = pidPct + '%';
+
+  // ── Info boxes: Coil temp + Door ───────────────────────────────────────
+  const coilEl = document.getElementById('infoCoil');
+  coilEl.textContent = s.coil_temp !== null && s.coil_temp !== undefined
+    ? s.coil_temp.toFixed(1) + '°'
+    : '--°';
+  coilEl.style.color = s.coil_temp > 200 ? 'var(--accent)' : 'var(--yellow)';
+
+  const doorEl = document.getElementById('infoDoor');
+  if (s.door_closed === null || s.door_closed === undefined) {
+    doorEl.textContent = '--';
+    doorEl.style.color = 'var(--muted)';
+  } else if (s.door_closed) {
+    doorEl.textContent = 'Closed';
+    doorEl.style.color = 'var(--green)';
+  } else {
+    doorEl.textContent = 'Open';
+    doorEl.style.color = s.mode === 'curing' ? 'var(--red)' : 'var(--yellow)';
+  }
+
+  // ── Accessories card – coil + door inline readout ──────────────────────
+  const coilValEl = document.getElementById('coilTempVal');
+  if (coilValEl) coilValEl.textContent = s.coil_temp !== null && s.coil_temp !== undefined
+    ? s.coil_temp.toFixed(1) : '--';
+
+  const doorStatEl = document.getElementById('doorStatus');
+  if (doorStatEl) {
+    doorStatEl.textContent = s.door_closed ? '🚪 Closed' : '🚪 Open';
+    doorStatEl.style.color = s.door_closed ? 'var(--muted)' : 'var(--yellow)';
+  }
+
+  // ── Fan / Light toggles ────────────────────────────────────────────────
+  fanState   = s.fan_on;
+  lightState = s.light_on;
+  const fanBtn   = document.getElementById('fanBtn');
+  const lightBtn = document.getElementById('lightBtn');
+  fanBtn.classList.toggle('active', s.fan_on);
+  lightBtn.classList.toggle('active', s.light_on);
+
+  // Show/hide fan speed slider
+  const fanSpeedRow = document.getElementById('fanSpeedRow');
+  if (fanSpeedRow) fanSpeedRow.style.display = s.fan_on ? 'block' : 'none';
+  const fanSlider = document.getElementById('fanSpeedSlider');
+  const fanLabel  = document.getElementById('fanSpeedLabel');
+  if (fanSlider && s.fan_speed !== undefined && document.activeElement !== fanSlider) {
+    fanSlider.value = Math.round(s.fan_speed || 255);
+    if (fanLabel) fanLabel.textContent = fanSlider.value;
+  }
+
+  // ── Start / Stop buttons ───────────────────────────────────────────────
+  document.getElementById('startBtn').disabled = active || !s.serial_connected;
+  document.getElementById('stopBtn').disabled  = !active;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Graph polling
+// ═══════════════════════════════════════════════════════════
+async function fetchHistory() {
+  try {
+    const r = await fetch('/api/history');
+    const data = await r.json();
+    if (!data.labels) return;
+
+    tempChart.data.labels = data.labels;
+    tempChart.data.datasets[0].data = data.temp1;
+    tempChart.data.datasets[1].data = data.temp2;
+    tempChart.data.datasets[2].data = data.labels.map(() => chartSetpointRef);
+    tempChart.update('none');
+  } catch(e) { /* silently ignore */ }
+}
+setInterval(fetchHistory, 3000);
+fetchHistory();
+
+// ═══════════════════════════════════════════════════════════
+//  Controls
+// ═══════════════════════════════════════════════════════════
+let setpointDebounce = null;
+function sendSetpoint() {
+  clearTimeout(setpointDebounce);
+  setpointDebounce = setTimeout(() => {
+    const v = parseFloat(document.getElementById('setpointInput').value);
+    if (!isNaN(v)) post('/api/setpoint', { temp: v });
+  }, 500);
+}
+
+function adjustSetpoint(delta) {
+  const el = document.getElementById('setpointInput');
+  el.value = Math.max(0, Math.min(450, parseFloat(el.value || 0) + delta));
+  sendSetpoint();
+}
+
+function setFanSpeed(level) {
+  post('/api/fan_speed', { level: parseInt(level) });
+}
+function adjustDuration(delta) {
+  const el = document.getElementById('durationInput');
+  el.value = Math.max(1, Math.min(480, parseFloat(el.value || 0) + delta));
+}
+
+function startCure() {
+  const target   = parseFloat(document.getElementById('setpointInput').value);
+  const duration = parseFloat(document.getElementById('durationInput').value);
+  post('/api/start_cure', { target_temp: target, duration_minutes: duration });
+}
+function stopCure() {
+  post('/api/stop_cure', {});
+}
+
+function toggleFan() {
+  fanState = !fanState;
+  post('/api/fan', { on: fanState });
+}
+function toggleLight() {
+  lightState = !lightState;
+  post('/api/light', { on: lightState });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Connect modal
+// ═══════════════════════════════════════════════════════════
+async function loadPorts() {
+  const list = document.getElementById('portList');
+  list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px">Scanning…</div>';
+  selectedPort = null;
+  try {
+    const r = await fetch('/api/ports');
+    const ports = await r.json();
+    if (!ports.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px">No serial ports found</div>';
+      return;
+    }
+    list.innerHTML = '';
+    ports.forEach(p => {
+      const el = document.createElement('div');
+      el.className = 'port-item';
+      el.innerHTML = `<strong>${p.device}</strong><div class="port-desc">${p.description}</div>`;
+      el.onclick = () => {
+        document.querySelectorAll('.port-item').forEach(x => x.classList.remove('selected'));
+        el.classList.add('selected');
+        selectedPort = p.device;
+      };
+      list.appendChild(el);
+    });
+  } catch(e) {
+    list.innerHTML = '<div style="color:var(--red);font-size:12px;padding:10px">Error loading ports</div>';
+  }
+}
+
+async function doConnect() {
+  const st = document.getElementById('connectStatus');
+  st.textContent = 'Connecting…'; st.className = 'modal-status';
+  const r = await post('/api/connect', { port: selectedPort });
+  if (r.success) {
+    st.textContent = '✓ Connected to ' + r.port; st.className = 'modal-status ok';
+  } else {
+    st.textContent = '✗ Connection failed'; st.className = 'modal-status err';
+  }
+}
+async function doDisconnect() {
+  await post('/api/disconnect', {});
+  document.getElementById('connectStatus').textContent = 'Disconnected';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WiFi modal
+// ═══════════════════════════════════════════════════════════
+async function scanWifi() {
+  const list = document.getElementById('networkList');
+  const curSt = document.getElementById('wifiCurrentStatus');
+  list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px">Scanning…</div>';
+  selectedNetwork = null;
+
+  // Current connection
+  try {
+    const cr = await fetch('/api/wifi/status');
+    const cs = await cr.json();
+    curSt.textContent = cs.connected
+      ? `✓ Connected: ${cs.ssid} (${cs.ip || ''})`
+      : 'Not connected';
+    curSt.className = 'modal-status ' + (cs.connected ? 'ok' : '');
+  } catch(e) {}
+
+  // Scan
+  try {
+    const r = await fetch('/api/wifi/scan');
+    const networks = await r.json();
+    list.innerHTML = '';
+    if (!networks.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px">No networks found</div>';
+      return;
+    }
+    networks.forEach(n => {
+      const el = document.createElement('div');
+      el.className = 'network-item';
+      el.innerHTML = `
+        <div style="flex:1">
+          <div class="network-ssid">${n.ssid}</div>
+          <div class="network-signal">${signalBars(n.signal)} ${n.signal}%  ${n.security || 'Open'}</div>
+        </div>
+        ${n.in_use ? '<span class="network-inuse">● Connected</span>' : ''}
+        ${n.security && n.security !== 'Open' ? '<span class="network-lock">🔒</span>' : ''}
+      `;
+      el.onclick = () => {
+        document.querySelectorAll('.network-item').forEach(x => x.classList.remove('selected'));
+        el.classList.add('selected');
+        selectedNetwork = n.ssid;
+      };
+      list.appendChild(el);
+    });
+  } catch(e) {
+    list.innerHTML = '<div style="color:var(--red);font-size:12px;padding:10px">Scan failed</div>';
+  }
+}
+
+async function doWifiConnect() {
+  if (!selectedNetwork) {
+    document.getElementById('wifiConnectStatus').textContent = 'Please select a network';
+    document.getElementById('wifiConnectStatus').className = 'modal-status err';
+    return;
+  }
+  const pwd = document.getElementById('wifiPassword').value;
+  const st = document.getElementById('wifiConnectStatus');
+  st.textContent = `Connecting to ${selectedNetwork}…`; st.className = 'modal-status';
+  const r = await post('/api/wifi/connect', { ssid: selectedNetwork, password: pwd || null });
+  st.textContent = r.message;
+  st.className   = 'modal-status ' + (r.success ? 'ok' : 'err');
+  if (r.success) setTimeout(scanWifi, 2000);
+}
+
+function signalBars(pct) {
+  if (pct > 75) return '▂▄▆█';
+  if (pct > 50) return '▂▄▆_';
+  if (pct > 25) return '▂▄__';
+  return '▂___';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Update modal
+// ═══════════════════════════════════════════════════════════
+async function checkUpdate() {
+  const st = document.getElementById('updateStatus');
+  const applyBtn = document.getElementById('applyUpdateBtn');
+  st.textContent = 'Checking…'; st.className = 'modal-status';
+  applyBtn.disabled = true;
+  try {
+    const r = await fetch('/api/check_update');
+    const d = await r.json();
+    if (d.update_available) {
+      st.textContent = `✓ ${d.commits_behind} update(s) available`;
+      st.className = 'modal-status ok';
+      applyBtn.disabled = false;
+      document.getElementById('updateDot').classList.add('visible');
+    } else {
+      st.textContent = 'Already up to date';
+      st.className = 'modal-status';
+    }
+  } catch(e) {
+    st.textContent = 'Could not check — no internet?';
+    st.className = 'modal-status err';
+  }
+}
+
+async function applyUpdate() {
+  const st  = document.getElementById('updateStatus');
+  const out = document.getElementById('updateOutput');
+  st.textContent = 'Applying update…'; st.className = 'modal-status';
+  out.textContent = '';
+  const r = await post('/api/update', {});
+  out.textContent = r.output;
+  if (r.success) {
+    st.textContent = '✓ Updated! Restarting service…';
+    st.className = 'modal-status ok';
+    document.getElementById('updateDot').classList.remove('visible');
+  } else {
+    st.textContent = '✗ Update failed';
+    st.className = 'modal-status err';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Modal helpers
+// ═══════════════════════════════════════════════════════════
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  if (id === 'connectModal') loadPorts();
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+//  Helpers
+// ═══════════════════════════════════════════════════════════
+async function post(url, body) {
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    return await r.json();
+  } catch(e) {
+    return { success: false, error: String(e) };
+  }
+}
+
+function fmtTime(totalSec) {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = Math.floor(totalSec % 60);
+  return [h, m, s].map(x => String(x).padStart(2, '0')).join(':');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Boot
+// ═══════════════════════════════════════════════════════════
+fetch('/api/state').then(r => r.json()).then(updateUI).catch(() => {});
+setTimeout(checkUpdate, 3000);  // check for updates 3s after load
+</script>
+</body>
+</html>

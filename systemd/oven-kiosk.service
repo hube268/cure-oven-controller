@@ -1,0 +1,29 @@
+[Unit]
+Description=Cure Oven Kiosk Display (Chromium)
+After=oven-control.service graphical-session.target
+Wants=graphical-session.target
+Requires=oven-control.service
+
+[Service]
+Type=simple
+User=pi
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/chromium-browser \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --no-first-run \
+  --disable-session-crashed-bubble \
+  --disable-translate \
+  --disable-features=TranslateUI \
+  --check-for-update-interval=31536000 \
+  --touch-events=enabled \
+  --disable-pinch \
+  http://localhost:5000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

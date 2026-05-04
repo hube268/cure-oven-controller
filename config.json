@@ -1,0 +1,70 @@
+{
+  "_comment": "CureControl Oven Controller Configuration",
+
+  "serial": {
+    "port": "auto",
+    "baud_rate": 115200,
+    "timeout": 2.0,
+    "vid": null,
+    "pid_usb": null,
+    "auto_poll": false
+  },
+
+  "_protocol_note": "PCB broadcasts status automatically ~4x/sec. Format is positional pipe-delimited:",
+  "_status_format": "<STATE|TIMER|?|SETPOINT|TC1_AVG (RAW1,RAW2)|TC2|HEATER|FAN|LIGHT|?|PID|?|DURATION_MIN|?>",
+  "_status_example": "<IDLE|0:00:00|1|400|62.92 (62.60, 63.05)|73.40|0|0|0|0|0.00|1|30|0>",
+
+  "pid": {
+    "kp": 2.0,
+    "ki": 0.05,
+    "kd": 1.0,
+    "output_min": 0,
+    "output_max": 100,
+    "sample_time": 1.0
+  },
+
+  "temperature": {
+    "max_safe_temp": 450,
+    "units": "F",
+    "primary_thermocouple": 1
+  },
+
+  "commands": {
+    "_note": "Commands reverse-engineered from curecontrol.jar. FanSpeed= and Light= confirmed from JAR strings. Start/Stop/Temperature need in-field verification.",
+    "_confirmed": "FanSpeed=<int> from UpdateFanLevelOperation.class  |  Light=<0|1> from UpdateLightEnableOperation.class",
+
+    "fan_on":          "FanSpeed=255",
+    "fan_off":         "FanSpeed=0",
+    "fan_speed":       "FanSpeed={value}",
+
+    "light_on":        "Light=1",
+    "light_off":       "Light=0",
+
+    "_start_note": "Start/cancel/temperature commands are educated guesses — verify against PCB with a logic analyzer if they do not work",
+    "set_temperature": "Temperature={value}",
+    "set_cure_time":   "CureTime={hours}:{minutes}:{seconds}",
+    "start_cure":      "Start",
+    "cancel_cure":     "Cancel",
+
+    "_legacy_note": "Original M-code guesses kept here for reference only — NOT sent to PCB",
+    "_heater_on":  "M104 S{value}",
+    "_heater_off": "M104 S0"
+  },
+
+  "server": {
+    "host": "0.0.0.0",
+    "port": 5000,
+    "debug": false
+  },
+
+  "github": {
+    "username": "hube268",
+    "repo": "cure-oven-controller",
+    "branch": "main"
+  },
+
+  "cure": {
+    "min_temp_delta_to_start_timer": 2.0,
+    "cool_down_temp": 100
+  }
+}
