@@ -6,8 +6,8 @@ Built to replace the original CureControl (Langmuir Systems) Java kiosk app.
 ## Features
 
 - **Dual thermocouple display** (Type K, TC1 + TC2)
-- **PID temperature control** — smooth, overshoot-resistant
-- **Cure timer** — starts automatically once target temp is reached
+- **PCB-native PID control** — the LS-CURE PCB runs its own PID; Python relays setpoints
+- **Cure timer** — PCB-reported elapsed timer shown in real time
 - **Fan & Light control**
 - **Real-time temperature graph** (Chart.js, 1-hour history)
 - **WiFi management** — scan SSIDs, enter credentials from the UI
@@ -71,51 +71,78 @@ Edit `config.json` before first run:
 ```json
 {
   "serial": {
-    "port": "auto",         // or "/dev/ttyUSB0"
+    "port": "auto",         // or "/dev/ttyACM0"
     "baud_rate": 115200
   },
   "temperature": {
-    "units": "F",           // "F" or "C"
-    "max_safe_temp": 300
+    "units": "F",
+    "max_safe_temp": 450
   },
-  "pid": {
-    "kp": 2.0,
-    "ki": 0.05,
-    "kd": 1.0
+  "commands": {
+    "fan_on":          "FanSpeed=255",
+    "fan_off":         "FanSpeed=0",
+    "fan_speed":       "FanSpeed={value}",
+    "light_on":        "Light=1",
+    "light_off":       "Light=0",
+    "set_temperature": "Temperature={value}",
+    "set_cure_time":   "CureTime={hours}:{minutes}:{seconds}",
+    "start_cure":      "Start",
+    "cancel_cure":     "Cancel"
   }
 }
 ```
 
 ---
 
-## ⚠️ Protocol Calibration (Important First Step)
+## PCB Serial Protocol (Langmuir LS-CURE)
 
-The CureControl PCB speaks a GRBL-derived serial protocol.
-The exact command set needs to be confirmed by observation.
+Reverse-engineered from `curecontrol.jar`. The PCB speaks a custom ASCII protocol at **115200 baud, 8N1**.
 
-**To discover your PCB's commands:**
+### Status Frame (broadcast ~4×/sec automatically)
 
-1. Connect the PCB via USB
-2. Open a serial terminal (e.g. `screen /dev/ttyUSB0 115200` or PuTTY)
-3. Press `?` and observe the status response
-4. Note the exact key names for temperature, heater, fan, light fields
-5. Update `config.json` → `"parsing"` and `"commands"` sections to match
-
-**Expected status format** (adjust `parsing` keys to match your firmware):
 ```
-<Idle|T1:175.2|T2:173.8|Heat:1|Fan:0|Light:1>
+<STATE|TIMER|IS_F|SETPOINT|TC_AVG (TC1, TC2)|COIL|FAN|FAN_SPEED|LIGHT|INTERNAL_TEMP|PID|STAY_ON|STAY_MIN|DOOR>
 ```
 
-**Expected control commands** (adjust `commands` to match your firmware):
+Live example:
 ```
-M104 S200   → set heater target to 200°
-M106 S255   → fan on
-M107        → fan off
-M355 S1     → light on
-M355 S0     → light off
+<IDLE|0:00:00|1|400|62.92 (62.60, 63.05)|73.40|0|0|0|0|0.00|1|30|0>
 ```
 
-If your PCB uses different command syntax, update `config.json` — no code changes needed.
+| Field | Index | Example | Description |
+|-------|-------|---------|-------------|
+| STATE | [0] | `IDLE` | PCB state machine state |
+| TIMER | [1] | `0:00:00` | PCB elapsed cure timer |
+| IS_F  | [2] | `1` | 1 = Fahrenheit, 0 = Celsius |
+| SETPOINT | [3] | `400` | Target temperature |
+| TC_AVG (TC1, TC2) | [4] | `62.92 (62.60, 63.05)` | Avg temp with individual TC readings in parens |
+| COIL | [5] | `73.40` | Heating element surface sensor (°F) |
+| FAN | [6] | `0` | Fan on/off |
+| FAN_SPEED | [7] | `0` | Fan speed 0–255 |
+| LIGHT | [8] | `0` | Light on/off |
+| INTERNAL_TEMP | [9] | `0` | PCB internal temperature sensor |
+| PID | [10] | `0.00` | PCB's own PID output (0–100%) |
+| STAY_ON | [11] | `1` | Stay-warm mode enabled |
+| STAY_MIN | [12] | `30` | Stay-warm hold duration (minutes) |
+| DOOR | [13] | `0` | Door sensor (1=closed, 0=open) |
+
+### Control Commands (confirmed from JAR)
+
+```
+FanSpeed=255        → fan on at full speed
+FanSpeed=0          → fan off
+Light=1             → light on
+Light=0             → light off
+Temperature=400     → set target temperature (°F)
+CureTime=0:30:00    → set cure duration (H:MM:SS)
+Start               → begin cure cycle
+Cancel              → abort cure cycle
+```
+
+> **Note:** `FanSpeed=` and `Light=` are confirmed from the JAR bytecode.
+> `Temperature=`, `CureTime=`, `Start`, and `Cancel` are best-guess ASCII commands — verify with a serial terminal if they don't work, and update `config.json → commands` accordingly. No code changes needed.
+
+The PCB runs its **own internal PID controller** (kp/ki/kd stored in EEPROM). Python does not run a PID loop — it only sends setpoint commands and reads state back from broadcasts.
 
 ---
 
