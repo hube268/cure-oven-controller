@@ -5,7 +5,7 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=pi
+User=SERVICE_USER_PLACEHOLDER
 WorkingDirectory=/home/pi/cure-oven-controller
 ExecStart=/home/pi/cure-oven-controller/venv/bin/python src/main.py
 Restart=always

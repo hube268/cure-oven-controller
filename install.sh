@@ -55,11 +55,15 @@ echo "[6/7] Installing systemd services…"
 
 # Backend service
 sudo cp systemd/oven-control.service /etc/systemd/system/
+sudo sed -i "s|SERVICE_USER_PLACEHOLDER|$SERVICE_USER|g" \
+  /etc/systemd/system/oven-control.service
 sudo sed -i "s|/home/pi/cure-oven-controller|$INSTALL_DIR|g" \
   /etc/systemd/system/oven-control.service
 
 # Kiosk service
 sudo cp systemd/oven-kiosk.service /etc/systemd/system/
+sudo sed -i "s|SERVICE_USER_PLACEHOLDER|$SERVICE_USER|g" \
+  /etc/systemd/system/oven-kiosk.service
 sudo sed -i "s|/home/pi/cure-oven-controller|$INSTALL_DIR|g" \
   /etc/systemd/system/oven-kiosk.service
 
@@ -69,7 +73,7 @@ sudo systemctl enable oven-kiosk.service
 
 # ── 7. Sudoers for OTA restart ───────────────────────────────
 echo "[7/7] Configuring OTA update permissions…"
-SUDOERS_LINE="$SERVICE_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart oven-control"
+SUDOERS_LINE="$SERVICE_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart oven-control"
 if ! sudo grep -qF "$SUDOERS_LINE" /etc/sudoers; then
   echo "$SUDOERS_LINE" | sudo tee -a /etc/sudoers > /dev/null
 fi
