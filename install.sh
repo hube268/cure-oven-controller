@@ -6,8 +6,8 @@
 set -e
 
 REPO_URL="https://github.com/hube268/cure-oven-controller.git"
-INSTALL_DIR="/home/pi/cure-oven-controller"
-SERVICE_USER="pi"
+SERVICE_USER="$(logname 2>/dev/null || whoami)"
+INSTALL_DIR="/home/$SERVICE_USER/cure-oven-controller"
 
 echo ""
 echo "╔═══════════════════════════════════════════╗"
