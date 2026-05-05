@@ -216,19 +216,26 @@ class GrblSerial:
     # ------------------------------------------------------------------ #
 
     def _read_loop(self):
-        """Continuously read lines from the serial port."""
-        buf = b""
+        """
+        Continuously read lines from the serial port using blocking readline().
+
+        Using readline() rather than in_waiting + read() because the Arduino
+        UNO R4 Minima USB CDC driver on Pi Bookworm frequently reports
+        in_waiting=0 even when data is present, causing the non-blocking
+        approach to starve.  readline() with the configured timeout blocks
+        until a full line arrives (or times out), which works reliably across
+        all USB CDC implementations.
+        """
         while not self._stop.is_set():
             try:
-                if self._port and self._port.in_waiting:
-                    buf += self._port.read(self._port.in_waiting)
-                    while b"\n" in buf:
-                        line, buf = buf.split(b"\n", 1)
-                        text = line.decode("utf-8", errors="replace").strip()
-                        if text:
-                            self._dispatch(text)
-                else:
-                    time.sleep(0.01)
+                if not self._port or not self._port.is_open:
+                    time.sleep(0.1)
+                    continue
+                raw = self._port.readline()   # blocks up to serial timeout
+                if raw:
+                    text = raw.decode("utf-8", errors="replace").strip()
+                    if text:
+                        self._dispatch(text)
             except serial.SerialException:
                 logger.error("Serial read error — disconnecting")
                 self._connected = False
