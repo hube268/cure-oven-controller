@@ -21,9 +21,9 @@ sudo apt-get update -qq
 sudo apt-get install -y -qq \
   python3 python3-pip python3-venv \
   git \
-  chromium-browser \
+  chromium \
   network-manager \
-  libatlas-base-dev
+  libopenblas-dev
 
 # ── 2. Clone or update repo ──────────────────────────────────
 echo "[2/7] Fetching source code from GitHub…"
