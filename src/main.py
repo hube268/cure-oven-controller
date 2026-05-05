@@ -81,7 +81,7 @@ def main():
     logger.info("Kiosk display → http://localhost:%d", port)
 
     try:
-        socketio.run(app, host=host, port=port, debug=False)
+        socketio.run(app, host=host, port=port, debug=False, allow_unsafe_werkzeug=True)
     except KeyboardInterrupt:
         logger.info("Shutdown requested")
     finally:
