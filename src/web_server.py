@@ -60,7 +60,7 @@ def create_app(controller, state, config: dict):
 
     socketio = SocketIO(
         app,
-        async_mode="eventlet",
+        async_mode="threading",
         cors_allowed_origins="*",
         logger=False,
         engineio_logger=False,
