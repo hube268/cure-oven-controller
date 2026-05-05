@@ -109,36 +109,41 @@ class OvenController:
         self._serial.send_command(cmd)
         logger.info("Setpoint → %.1f°", temp)
 
-    def start_cure(self, target_temp: float, duration_minutes: float):
+    def warm_up(self, target_temp: float):
         """
-        Configure and start a cure cycle on the PCB.
-        Sends: temperature setpoint, cure time, then Start.
+        Phase 1 — send setpoint and start heating.
+        PCB transitions: IDLE → WARMING UP → AT TEMP (holds until start_cure() called).
+        Confirmed command: WarmUp (from pcb_output2.txt / pcb_output4.txt).
         """
         target_temp = min(float(target_temp), float(self._max_temp))
-        duration_minutes = float(duration_minutes)
-
-        # Set temperature
         self.set_setpoint(target_temp)
+        warm_cmd = self._cmds.get("warm_up", "WarmUp")
+        self._serial.send_command(warm_cmd)
+        self._state.set_mode("heating")
+        logger.info("Warm up started: target=%.1f°", target_temp)
 
-        # Set cure time (convert minutes to H:MM:SS for PCB)
+    def start_cure(self, duration_minutes: float):
+        """
+        Phase 2 — begin cure countdown.
+        Call after PCB has reached AT TEMP state.
+        Sends cure time then Start; PCB transitions AT TEMP → CURING.
+        After CURING completes PCB returns to AT TEMP (holds at setpoint).
+        Confirmed command: Start (from pcb_output4.txt).
+        """
+        duration_minutes = float(duration_minutes)
         total_secs = int(duration_minutes * 60)
-        h  = total_secs // 3600
-        m  = (total_secs % 3600) // 60
-        s  = total_secs % 60
+        h = total_secs // 3600
+        m = (total_secs % 3600) // 60
+        s = total_secs % 60
         time_cmd = self._cmds.get("set_cure_time", "CureTime={hours}:{minutes}:{seconds}").format(
             hours=h, minutes=f"{m:02d}", seconds=f"{s:02d}"
         )
         self._serial.send_command(time_cmd)
-
-        # Start the PCB's cure cycle
         start_cmd = self._cmds.get("start_cure", "Start")
         self._serial.send_command(start_cmd)
-
-        # Mirror in Python state for UI (PCB timer is authoritative once running)
         self._state.start_cure_timer(total_secs)
-        self._state.set_mode("heating")
-
-        logger.info("Cure started: target=%.1f°  duration=%.0f min", target_temp, duration_minutes)
+        self._state.set_mode("curing")
+        logger.info("Cure started: duration=%.0f min", duration_minutes)
 
     def stop_cure(self):
         """Send cancel command to PCB and reset local state."""
@@ -147,6 +152,13 @@ class OvenController:
         self._state.stop_cure_timer()
         self._state.set_mode("idle")
         logger.info("Cure stopped / cancelled")
+
+    def set_stay_warm(self, on: bool):
+        """Toggle stay-warm mode on the PCB."""
+        cmd = self._cmds.get("stay_warm_on", "StayOn") if on \
+              else self._cmds.get("stay_warm_off", "StayOff")
+        self._serial.send_command(cmd)
+        logger.debug("Stay warm → %s", "ON" if on else "OFF")
 
     def set_fan(self, on: bool):
         """Toggle fan on or off (preserves last speed when turning on)."""
@@ -194,7 +206,7 @@ class OvenController:
         mode = snap["mode"]
         temp = snap["temp_avg"] or snap["temp1"]
 
-        if mode in ("heating", "curing") and temp is not None:
+        if mode in ("heating", "ready", "curing") and temp is not None:
             # Software safety cutoff — belt-and-suspenders in case PCB doesn't stop
             if temp > self._max_temp + self.MAX_TEMP_OVERSHOOT:
                 logger.error(
@@ -205,21 +217,23 @@ class OvenController:
                 self._state.set_mode("error")
                 return
 
-        # Tick the Python-side cure timer (authoritative display when curing)
-        if mode in ("heating", "curing") and snap["cure_duration"] > 0:
+        # Tick the Python-side cure timer shadow
+        if mode == "curing" and snap["cure_duration"] > 0:
             done = self._state.tick_cure_timer()
-            if done and mode == "curing":
-                logger.info("Cure timer complete (Python shadow)")
-                # Don't stop — wait for PCB to transition to its done state
+            if done:
+                logger.info("Cure timer complete (Python shadow) — waiting for PCB AT TEMP")
 
-        # Mirror PCB state into our mode field
-        pcb = snap.get("pcb_state", "")
-        if pcb and pcb != snap["pcb_state"]:
-            return  # already in sync
-        if pcb in ("CURE", "CURING") and mode == "heating":
+        # Mirror PCB state into our mode field (secondary to _on_status which runs more often)
+        pcb = snap.get("pcb_state", "").upper()
+        if pcb == "AT TEMP" and mode == "heating":
+            self._state.set_mode("ready")
+        elif pcb == "CURING" and mode in ("heating", "ready"):
             self._state.set_mode("curing")
-        elif pcb in ("IDLE", "DONE", "FINISHED") and mode in ("heating", "curing"):
-            # PCB transitioned back to idle — cure finished or was cancelled
+        elif pcb == "AT TEMP" and mode == "curing":
+            # Cure completed — PCB returned to AT TEMP holding state
+            self._state.stop_cure_timer()
+            self._state.set_mode("ready")
+        elif pcb == "IDLE" and mode in ("heating", "ready", "curing"):
             self._state.stop_cure_timer()
             self._state.set_mode("idle")
 
@@ -231,23 +245,33 @@ class OvenController:
         """Called ~4×/sec from grbl_serial reader thread."""
         self._state.update_from_status(status)
 
-        # Sync mode from PCB state string
+        # Sync mode from confirmed PCB state strings (pcb_output4.txt, May 2026)
         pcb = status.get("state", "").upper()
         current_mode = self._state.mode
-        if pcb in ("CURE", "CURING", "RUN") and current_mode == "heating":
+        if pcb == "WARMING UP" and current_mode == "idle":
+            self._state.set_mode("heating")
+        elif pcb == "AT TEMP" and current_mode == "heating":
+            # Reached setpoint — waiting for Start command
+            self._state.set_mode("ready")
+        elif pcb == "CURING" and current_mode in ("heating", "ready"):
             self._state.set_mode("curing")
-        elif pcb in ("IDLE", "DONE", "FINISHED", "COMPLETE") and current_mode in ("heating", "curing"):
+        elif pcb == "AT TEMP" and current_mode == "curing":
+            # Cure completed — PCB holds at setpoint
+            self._state.stop_cure_timer()
+            self._state.set_mode("ready")
+        elif pcb == "IDLE" and current_mode in ("heating", "ready", "curing"):
             self._state.stop_cure_timer()
             self._state.set_mode("idle")
-        elif pcb in ("WARMING UP", "WARM", "WARMUP", "HEAT") and current_mode == "idle":
-            self._state.set_mode("heating")
         elif pcb == "ERROR" and current_mode != "error":
             self._state.set_mode("error")
 
     def _on_line(self, line: str):
         """Called for every non-status line received (ok/error/alarm/welcome)."""
         ul = line.upper()
-        if "ALARM" in ul:
+        if "{OVER_TEMP}" in ul:
+            # PCB informational warning when temp exceeds setpoint — not a fault state
+            logger.debug("PCB over-temp warning (normal during curing): %s", line)
+        elif "ALARM" in ul:
             logger.warning("PCB ALARM: %s", line)
             self._state.set_mode("error")
         elif ul.startswith("ERROR"):

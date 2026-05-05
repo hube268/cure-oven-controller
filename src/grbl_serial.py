@@ -268,14 +268,25 @@ class GrblSerial:
           <STATE|TIMER|IS_F|SETPOINT|TC_AVG (TC1, TC2)|COIL|FAN|FAN_SPEED|LIGHT|INTERNAL_TEMP|PID|STAY_ON|STAY_MIN|DOOR>
            [0]   [1]   [2]   [3]          [4]           [5]  [6]   [7]      [8]     [9]        [10]  [11]    [12]   [13]
 
+        Confirmed PCB states (from pcb_output4.txt full-cycle capture, May 2026):
+          IDLE        — heater off, not running; field [1] shows preset duration
+          WARMING UP  — heater relay on (field [6]=1), PID=10000 (full blast); timer frozen
+          AT TEMP     — at setpoint, waiting for Start command; also state after cure completes
+                        heater off (field [6]=0), PID=0; timer shows preset duration
+          CURING      — cure countdown active; heater managed by PCB PID; timer counts DOWN
+          {OVER_TEMP} — non-frame warning line emitted when temp exceeds setpoint (not an error)
+
         Canonical logical field names (from CureMachineStatus.java / MachineStatusMessage.java):
           state; time; isFahrenheit; targetTemperature; temperatureReading;
           temperature1; temperature2;  ← embedded in field [4] parentheses
           coil; fan; fanSpeed; light; internalTemperature; pidOutput;
           stayOn; stayWarmMinutes; doorClosed
 
-        Live example from PCB:
-          <IDLE|0:00:00|1|400|62.92 (62.60, 63.05)|73.40|0|0|0|0|0.00|1|30|0>
+        Live examples from PCB:
+          <IDLE|0:03:00|1|200|75.82 (72.50, 79.25)|66.54|0|0|0|0|10000.00|1|30|1>
+          <WARMING UP|0:03:00|1|200|76.29 (72.95, 79.70)|66.54|1|0|0|0|10000.00|1|30|1>
+          <AT TEMP|0:03:00|1|200|207.84 (186.80, 229.55)|66.65|0|0|0|0|0.00|1|30|1>
+          <CURING|0:02:59|1|200|207.84 (187.25, 230.00)|66.65|0|0|0|0|0.00|1|30|1>
 
         Notes:
           - Field [4] = "avg (tc1, tc2)" e.g. "62.92 (62.60, 63.05)"
