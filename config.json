@@ -30,9 +30,10 @@
   },
 
   "commands": {
-    "_note": "Commands from live PCB serial captures (pcb_output.txt + pcb_output2.txt, May 2026)",
-    "_confirmed": "LightOn/LightOff/FanOn/FanOff/WarmUp CONFIRMED from serial captures.",
-    "_unconfirmed": "Temperature/CureTime/Cancel not yet observed in captures — educated guesses based on naming convention.",
+    "_note": "Commands from live PCB serial captures (pcb_output.txt/2/4, May 2026)",
+    "_confirmed": "LightOn/LightOff/FanOn/FanOff/WarmUp/Start ALL CONFIRMED from serial captures.",
+    "_states_confirmed": "IDLE / WARMING UP / AT TEMP / CURING all confirmed. AT TEMP = at setpoint waiting for Start, or holding after cure completes.",
+    "_unconfirmed": "Cancel/Temperature/CureTime not yet observed — educated guesses.",
 
     "fan_on":          "FanOn",
     "fan_off":         "FanOff",
@@ -41,8 +42,13 @@
     "light_on":        "LightOn",
     "light_off":       "LightOff",
 
-    "start_cure":      "WarmUp",
+    "warm_up":         "WarmUp",
+    "start_cure":      "Start",
     "cancel_cure":     "Cancel",
+
+    "_stay_warm_note": "Stay warm commands are educated guesses — verify against PCB",
+    "stay_warm_on":    "StayOn",
+    "stay_warm_off":   "StayOff",
 
     "_temp_note": "Temperature and cure time commands not yet confirmed — verify against PCB before use",
     "set_temperature": "Temperature={value}",

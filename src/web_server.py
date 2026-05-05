@@ -10,8 +10,10 @@ REST endpoints:
   POST /api/connect         — connect to PCB serial port
   POST /api/disconnect      — disconnect from PCB
   POST /api/setpoint        — set target temperature
-  POST /api/start_cure      — begin a cure cycle
+  POST /api/warm_up         — phase 1: heat to setpoint (WarmUp command)
+  POST /api/start_cure      — phase 2: begin cure countdown (Start command)
   POST /api/stop_cure       — abort cure
+  POST /api/stay_warm       — toggle stay-warm mode
   POST /api/fan             — toggle fan
   POST /api/light           — toggle light
   GET  /api/ports           — list serial ports
@@ -120,20 +122,37 @@ def create_app(controller, state, config: dict):
         _controller.set_setpoint(float(temp))
         return jsonify({"success": True, "setpoint": float(temp)})
 
+    @app.route("/api/warm_up", methods=["POST"])
+    def api_warm_up():
+        """Phase 1: send setpoint and start heating. PCB will reach AT TEMP and hold."""
+        body = request.get_json(silent=True) or {}
+        target = body.get("target_temp")
+        if target is None:
+            return jsonify({"error": "missing 'target_temp'"}), 400
+        _controller.warm_up(float(target))
+        return jsonify({"success": True})
+
     @app.route("/api/start_cure", methods=["POST"])
     def api_start_cure():
+        """Phase 2: begin cure countdown. Call once PCB is in AT TEMP state."""
         body = request.get_json(silent=True) or {}
-        target   = body.get("target_temp")
         duration = body.get("duration_minutes")
-        if target is None or duration is None:
-            return jsonify({"error": "missing 'target_temp' or 'duration_minutes'"}), 400
-        _controller.start_cure(float(target), float(duration))
+        if duration is None:
+            return jsonify({"error": "missing 'duration_minutes'"}), 400
+        _controller.start_cure(float(duration))
         return jsonify({"success": True})
 
     @app.route("/api/stop_cure", methods=["POST"])
     def api_stop_cure():
         _controller.stop_cure()
         return jsonify({"success": True})
+
+    @app.route("/api/stay_warm", methods=["POST"])
+    def api_stay_warm():
+        body = request.get_json(silent=True) or {}
+        on = bool(body.get("on", False))
+        _controller.set_stay_warm(on)
+        return jsonify({"success": True, "stay_warm": on})
 
     # ------------------------------------------------------------------ #
     #  Accessories                                                         #
