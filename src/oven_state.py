@@ -37,7 +37,7 @@ class OvenState:
         self.temp2: Optional[float] = None      # TC2 raw reading
         self.temp_avg: Optional[float] = None   # averaged TC reading (primary display)
         self.coil_temp: Optional[float] = None  # heating element surface sensor
-        self.internal_temp: Optional[float] = None  # PCB internal temperature
+        self.heater_on: bool = False             # heating coil relay (field [6])
         self.pcb_state: str = "Disconnected"
         self.fan_on: bool = False
         self.fan_speed: float = 0.0
@@ -76,7 +76,7 @@ class OvenState:
             self.temp2        = status.get("temp2")
             self.temp_avg     = status.get("temp_avg")
             self.coil_temp    = status.get("coil_temp")
-            self.internal_temp = status.get("internal_temp")
+            self.heater_on    = status.get("heater", False)
 
             # Output device states
             self.fan_on       = status.get("fan", False)
@@ -170,7 +170,7 @@ class OvenState:
                 "temp2":            self.temp2,
                 "temp_avg":         self.temp_avg,
                 "coil_temp":        self.coil_temp,
-                "internal_temp":    self.internal_temp,
+                "heater_on":        self.heater_on,
 
                 # Target & mode
                 "setpoint":         self.setpoint,
@@ -183,7 +183,7 @@ class OvenState:
                 "fan_speed":        self.fan_speed,
                 "light_on":         self.light_on,
 
-                # PCB control loop
+                # PCB control loop (0=off, 10000=full power)
                 "pid_output":       round(self.pid_output, 1),
 
                 # Stay-warm mode

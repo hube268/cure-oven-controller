@@ -216,7 +216,7 @@ class OvenController:
         pcb = snap.get("pcb_state", "")
         if pcb and pcb != snap["pcb_state"]:
             return  # already in sync
-        if pcb in ("CURE",) and mode == "heating":
+        if pcb in ("CURE", "CURING") and mode == "heating":
             self._state.set_mode("curing")
         elif pcb in ("IDLE", "DONE", "FINISHED") and mode in ("heating", "curing"):
             # PCB transitioned back to idle — cure finished or was cancelled
@@ -239,7 +239,7 @@ class OvenController:
         elif pcb in ("IDLE", "DONE", "FINISHED", "COMPLETE") and current_mode in ("heating", "curing"):
             self._state.stop_cure_timer()
             self._state.set_mode("idle")
-        elif pcb in ("WARM", "WARMUP", "HEAT") and current_mode == "idle":
+        elif pcb in ("WARMING UP", "WARM", "WARMUP", "HEAT") and current_mode == "idle":
             self._state.set_mode("heating")
         elif pcb == "ERROR" and current_mode != "error":
             self._state.set_mode("error")

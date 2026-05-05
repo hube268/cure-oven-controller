@@ -285,7 +285,7 @@ class GrblSerial:
           - Field [7] = fan speed (0–255 or level enum)
           - Field [8] = light on/off boolean
           - Field [9] = PCB internal temperature sensor
-          - Field [10] = PCB's own PID output (the PCB runs its own PID loop)
+          - Field [10] = PCB's own PID output (0=off, 10000=full power; observed 10000.00 during WARMING UP)
           - Field [11] = stay-warm enable flag
           - Field [12] = stay-warm hold duration in minutes
           - Field [13] = door sensor (1=closed, 0=open)
@@ -347,13 +347,18 @@ class GrblSerial:
                 "coil_temp":         fpart(5),     # heating element surface sensor
                 "internal_temp":     fpart(9),     # PCB internal temperature sensor
 
-                # Output devices
-                "fan":               bpart(6),
-                "fan_speed":         fpart(7),     # 0–255
-                "light":             bpart(8),
+                # Output devices — field mapping confirmed from live PCB capture May 2026
+                # [6] = heater relay on/off (0 when idle)
+                # [7] = FAN on/off  (confirmed: FanOn sets this to 1)
+                # [8] = FAN_SPEED   (0–255, always 0 in idle capture)
+                # [9] = LIGHT on/off (confirmed: LightOn sets this to 1)
+                "heater":            bpart(6),
+                "fan":               bpart(7),
+                "fan_speed":         fpart(8),
+                "light":             bpart(9),
 
                 # PCB control loop
-                "pid_output":        fpart(10),    # PCB's own PID output (0–100)
+                "pid_output":        fpart(10),    # PCB's own PID output (0–10000; 10000=full power confirmed from live capture)
 
                 # Stay-warm mode
                 "stay_on":           bpart(11),

@@ -30,25 +30,23 @@
   },
 
   "commands": {
-    "_note": "Commands reverse-engineered from curecontrol.jar. FanSpeed= and Light= confirmed from JAR strings. Start/Stop/Temperature need in-field verification.",
-    "_confirmed": "FanSpeed=<int> from UpdateFanLevelOperation.class  |  Light=<0|1> from UpdateLightEnableOperation.class",
+    "_note": "Commands from live PCB serial captures (pcb_output.txt + pcb_output2.txt, May 2026)",
+    "_confirmed": "LightOn/LightOff/FanOn/FanOff/WarmUp CONFIRMED from serial captures.",
+    "_unconfirmed": "Temperature/CureTime/Cancel not yet observed in captures — educated guesses based on naming convention.",
 
-    "fan_on":          "FanSpeed=255",
-    "fan_off":         "FanSpeed=0",
+    "fan_on":          "FanOn",
+    "fan_off":         "FanOff",
     "fan_speed":       "FanSpeed={value}",
 
-    "light_on":        "Light=1",
-    "light_off":       "Light=0",
+    "light_on":        "LightOn",
+    "light_off":       "LightOff",
 
-    "_start_note": "Start/cancel/temperature commands are educated guesses — verify against PCB with a logic analyzer if they do not work",
-    "set_temperature": "Temperature={value}",
-    "set_cure_time":   "CureTime={hours}:{minutes}:{seconds}",
-    "start_cure":      "Start",
+    "start_cure":      "WarmUp",
     "cancel_cure":     "Cancel",
 
-    "_legacy_note": "Original M-code guesses kept here for reference only — NOT sent to PCB",
-    "_heater_on":  "M104 S{value}",
-    "_heater_off": "M104 S0"
+    "_temp_note": "Temperature and cure time commands not yet confirmed — verify against PCB before use",
+    "set_temperature": "Temperature={value}",
+    "set_cure_time":   "CureTime={hours}:{minutes}:{seconds}"
   },
 
   "server": {
