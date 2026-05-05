@@ -150,8 +150,8 @@ class OvenController:
 
     def set_fan(self, on: bool):
         """Toggle fan on or off (preserves last speed when turning on)."""
-        cmd = self._cmds.get("fan_on", "FanSpeed=255") if on \
-              else self._cmds.get("fan_off", "FanSpeed=0")
+        cmd = self._cmds.get("fan_on", "FanOn") if on \
+              else self._cmds.get("fan_off", "FanOff")
         self._serial.send_command(cmd)
         logger.debug("Fan → %s", "ON" if on else "OFF")
 
@@ -164,8 +164,8 @@ class OvenController:
 
     def set_light(self, on: bool):
         """Toggle the oven light."""
-        cmd = self._cmds.get("light_on", "Light=1") if on \
-              else self._cmds.get("light_off", "Light=0")
+        cmd = self._cmds.get("light_on", "LightOn") if on \
+              else self._cmds.get("light_off", "LightOff")
         self._serial.send_command(cmd)
         logger.debug("Light → %s", "ON" if on else "OFF")
 
